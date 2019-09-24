@@ -1,7 +1,7 @@
-// REQUIRES: VENDOR=apple 
+// RUN: export DARWIN_TARGET=x86_64-apple-macosx10.9
 // RUN: %empty-directory(%t)
-// RUN: %target-swift-frontend -typecheck %s -application-extension -emit-tbd -emit-tbd-path %t/safe.tbd
-// RUN: %target-swift-frontend -typecheck %s -emit-tbd -emit-tbd-path %t/not-safe.tbd
+// RUN: %target-swift-frontend -target $DARWIN_TARGET -typecheck %s -application-extension -emit-tbd -emit-tbd-path %t/safe.tbd
+// RUN: %target-swift-frontend -target $DARWIN_TARGET -typecheck %s -emit-tbd -emit-tbd-path %t/not-safe.tbd
 
 // RUN: %FileCheck %s --check-prefix EXTENSIONSAFE < %t/safe.tbd
 // RUN: %FileCheck %s --check-prefix NOTEXTENSIONSAFE < %t/not-safe.tbd

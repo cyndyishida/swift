@@ -1,18 +1,18 @@
-// REQUIRES: VENDOR=apple 
+// RUN: export DARWIN_TARGET=x86_64-apple-macosx10.9
 // Validate the the specializations actually exist (if they don't then we're not
 // validating that they end up with the correct linkages):
-// RUN: %target-swift-frontend -emit-sil -o- -O -validate-tbd-against-ir=none %s | %FileCheck %s
+// RUN: %target-swift-frontend -target $DARWIN_TARGET -emit-sil -o- -O -validate-tbd-against-ir=none %s | %FileCheck %s
 
-// RUN: %target-swift-frontend -emit-ir -o/dev/null -O -validate-tbd-against-ir=all %s
-// RUN: %target-swift-frontend -emit-ir -o/dev/null -O -validate-tbd-against-ir=all -enable-library-evolution %s
+// RUN: %target-swift-frontend -target $DARWIN_TARGET -emit-ir -o/dev/null -O -validate-tbd-against-ir=all %s
+// RUN: %target-swift-frontend -target $DARWIN_TARGET -emit-ir -o/dev/null -O -validate-tbd-against-ir=all -enable-library-evolution %s
 
 // With -enable-testing:
-// RUN: %target-swift-frontend -emit-ir -o/dev/null -O -validate-tbd-against-ir=all -enable-testing %s
-// RUN: %target-swift-frontend -emit-ir -o/dev/null -O -validate-tbd-against-ir=all -enable-library-evolution -enable-testing %s
+// RUN: %target-swift-frontend -target $DARWIN_TARGET -emit-ir -o/dev/null -O -validate-tbd-against-ir=all -enable-testing %s
+// RUN: %target-swift-frontend -target $DARWIN_TARGET -emit-ir -o/dev/null -O -validate-tbd-against-ir=all -enable-library-evolution -enable-testing %s
 
 // RUN: %empty-directory(%t)
-// RUN: %target-swift-frontend -typecheck -parse-as-library -module-name test %s -emit-tbd -emit-tbd-path %t/typecheck.tbd
-// RUN: %target-swift-frontend -emit-ir -parse-as-library -module-name test %s -emit-tbd -emit-tbd-path %t/emit-ir.tbd
+// RUN: %target-swift-frontend -target $DARWIN_TARGET -typecheck -parse-as-library -module-name test %s -emit-tbd -emit-tbd-path %t/typecheck.tbd
+// RUN: %target-swift-frontend -target $DARWIN_TARGET -emit-ir -parse-as-library -module-name test %s -emit-tbd -emit-tbd-path %t/emit-ir.tbd
 // RUN: diff -u %t/typecheck.tbd %t/emit-ir.tbd
 
 // rdar://problem/40738913
