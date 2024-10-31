@@ -234,12 +234,15 @@ ModuleDependencyScanningWorker::scanFilesystemForModuleDependency(
           *scanningASTDelegate, cache.getScanService().getPrefixMapper(),
           isTestableImport);
 
-  if (moduleDependencies.empty())
+  if (moduleDependencies.empty()) {
+    // FIXME(Cyndy): Blindly wrap in vector.
+    std::vector<StringRef> moduleNames = {moduleName.str()};
     moduleDependencies = clangScannerModuleLoader->getModuleDependencies(
-        moduleName, cache.getModuleOutputPath(),
+        moduleNames, cache.getModuleOutputPath(),
         cache.getAlreadySeenClangModules(), clangScanningTool,
         *scanningASTDelegate, cache.getScanService().getPrefixMapper(),
         isTestableImport);
+  }
 
   return moduleDependencies;
 }
@@ -256,9 +259,9 @@ ModuleDependencyScanningWorker::scanFilesystemForSwiftModuleDependency(
 
 ModuleDependencyVector
 ModuleDependencyScanningWorker::scanFilesystemForClangModuleDependency(
-    Identifier moduleName, const ModuleDependenciesCache &cache) {
+    ArrayRef<StringRef> moduleNames, const ModuleDependenciesCache &cache) {
   return clangScannerModuleLoader->getModuleDependencies(
-      moduleName, cache.getModuleOutputPath(),
+      moduleNames, cache.getModuleOutputPath(),
       cache.getAlreadySeenClangModules(), clangScanningTool,
       *scanningASTDelegate, cache.getScanService().getPrefixMapper(), false);
 }
@@ -499,10 +502,12 @@ ModuleDependencyScanner::getNamedClangModuleDependencyInfo(
 
   // Otherwise perform filesystem scan
   auto moduleIdentifier = getModuleImportIdentifier(moduleName);
+  // FIXME(Cyndy): Blindly apply vector.
+  std::vector<StringRef> names{moduleIdentifier.str()};
   auto moduleDependencies = withDependencyScanningWorker(
-      [&cache, moduleIdentifier](ModuleDependencyScanningWorker *ScanningWorker) {
-        return ScanningWorker->scanFilesystemForClangModuleDependency(
-            moduleIdentifier, cache);
+      [&cache, names](ModuleDependencyScanningWorker *ScanningWorker) {
+        return ScanningWorker->scanFilesystemForClangModuleDependency(names,
+                                                                      cache);
       });
   if (moduleDependencies.empty())
     return std::nullopt;
@@ -756,42 +761,78 @@ ModuleDependencyScanner::resolveAllClangModuleDependencies(
 
   std::mutex CacheAccessLock;
   auto scanForClangModuleDependency =
-      [this, &cache, &moduleLookupResult, &CacheAccessLock](Identifier moduleIdentifier) {
-        auto moduleName = moduleIdentifier.str();
+      [this, &cache, &moduleLookupResult,
+       &CacheAccessLock](ArrayRef<Identifier> moduleIdentifiers) {
+        std::vector<StringRef> moduleNames;
         {
+          // FIXME(Cyndy): Does this make sense? loading the vector of
+          // modulenames.
           std::lock_guard<std::mutex> guard(CacheAccessLock);
-          if (cache.hasDependency(moduleName, ModuleDependencyKind::Clang))
+          for (const auto &identifier : moduleIdentifiers) {
+            auto moduleName = identifier.str();
+            if (!cache.hasDependency(moduleName, ModuleDependencyKind::Clang))
+              moduleNames.push_back(moduleName);
+          }
+          // We have already loaded every module.
+          if (moduleNames.empty())
             return;
         }
-
         auto moduleDependencies = withDependencyScanningWorker(
             [&cache,
-             moduleIdentifier](ModuleDependencyScanningWorker *ScanningWorker) {
+             moduleNames](ModuleDependencyScanningWorker *ScanningWorker) {
               return ScanningWorker->scanFilesystemForClangModuleDependency(
-                  moduleIdentifier, cache);
+                  moduleNames, cache);
             });
 
         // Update the `moduleLookupResult` and cache all discovered dependencies
         // so that subsequent queries do not have to call into the scanner
-        // if looking for a module that was discovered as a transitive dependency
-        // in this scan.
+        // if looking for a module that was discovered as a transitive
+        // dependency in this scan.
+        // FIXME(Cyndy): What is expected here? Can the same module dependencies
+        // be reused.
         {
           std::lock_guard<std::mutex> guard(CacheAccessLock);
-          moduleLookupResult.insert_or_assign(moduleName, moduleDependencies);
+          for (const auto &moduleName : moduleNames)
+            moduleLookupResult.insert_or_assign(moduleName, moduleDependencies);
           if (!moduleDependencies.empty())
             cache.recordDependencies(moduleDependencies);
         }
       };
 
-  // Enque asynchronous lookup tasks
-  for (const auto &unresolvedIdentifier : unresolvedImportIdentifiers)
-    ScanningThreadPool.async(
-        scanForClangModuleDependency,
-        getModuleImportIdentifier(unresolvedIdentifier.getKey()));
-  for (const auto &unresolvedIdentifier : unresolvedOptionalImportIdentifiers)
-    ScanningThreadPool.async(
-        scanForClangModuleDependency,
-        getModuleImportIdentifier(unresolvedIdentifier.getKey()));
+  auto splitUnresolvedModuleIdentifiers = [&](auto &unresolvedIdentifiers) {
+    // Enque asynchronous lookup tasks.
+    // Split up unresolved imports for clang to resolve by the number of
+    // workers.
+    std::vector<StringRef> unresolvedModuleNames(
+        unresolvedImportIdentifiers.keys().begin(),
+        unresolvedImportIdentifiers.keys().end());
+    auto chunkResults =
+        std::div((int)unresolvedImportIdentifiers.size(), NumThreads);
+    size_t chunkSize = chunkResults.quot;
+    const size_t remainingSize = chunkResults.rem;
+    for (size_t i = 0, boundary = chunkSize;
+         chunkSize != 0 && boundary <= unresolvedImportIdentifiers.size();
+         boundary += chunkSize) {
+      // Loadup identifiers.
+      std::vector<Identifier> moduleIdentifiers;
+      for (; i < boundary; ++i)
+        moduleIdentifiers.emplace_back(
+            getModuleImportIdentifier(unresolvedModuleNames[i]));
+      // Scan for dependencies in batch.
+      ScanningThreadPool.async(scanForClangModuleDependency, moduleIdentifiers);
+    }
+
+    // Pickup remainder.
+    std::vector<Identifier> moduleIdentifiers;
+    for (size_t i = unresolvedImportIdentifiers.size() - remainingSize;
+         i < unresolvedImportIdentifiers.size(); ++i)
+      moduleIdentifiers.emplace_back(
+          getModuleImportIdentifier(unresolvedModuleNames[i]));
+    ScanningThreadPool.async(scanForClangModuleDependency, moduleIdentifiers);
+  };
+
+  splitUnresolvedModuleIdentifiers(unresolvedImportIdentifiers);
+  splitUnresolvedModuleIdentifiers(unresolvedOptionalImportIdentifiers);
   ScanningThreadPool.wait();
 
   // Use the computed scan results to update the dependency info

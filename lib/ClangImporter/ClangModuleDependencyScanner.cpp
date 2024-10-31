@@ -419,14 +419,13 @@ computeClangWorkingDirectory(const std::vector<std::string> &commandLineArgs,
   return workingDir;
 }
 
-ModuleDependencyVector
-ClangImporter::getModuleDependencies(Identifier moduleName,
-                                     StringRef moduleOutputPath,
-                                     const llvm::DenseSet<clang::tooling::dependencies::ModuleID> &alreadySeenClangModules,
-                                     clang::tooling::dependencies::DependencyScanningTool &clangScanningTool,
-                                     InterfaceSubContextDelegate &delegate,
-                                     llvm::PrefixMapper *mapper,
-                                     bool isTestableImport) {
+ModuleDependencyVector ClangImporter::getModuleDependencies(
+    ArrayRef<StringRef> moduleNames, StringRef moduleOutputPath,
+    const llvm::DenseSet<clang::tooling::dependencies::ModuleID>
+        &alreadySeenClangModules,
+    clang::tooling::dependencies::DependencyScanningTool &clangScanningTool,
+    InterfaceSubContextDelegate &delegate, llvm::PrefixMapper *mapper,
+    bool isTestableImport) {
   auto &ctx = Impl.SwiftContext;
   // Determine the command-line arguments for dependency scanning.
   std::vector<std::string> commandLineArgs =
@@ -445,16 +444,17 @@ ClangImporter::getModuleDependencies(Identifier moduleName,
     return moduleCacheRelativeLookupModuleOutput(MID, MOK, moduleOutputPath);
   };
 
-  auto clangModuleDependencies =
-      clangScanningTool.getModuleDependencies(
-          moduleName.str(), commandLineArgs, workingDir,
-          alreadySeenClangModules, lookupModuleOutput);
+  auto clangModuleDependencies = clangScanningTool.getModuleDependencies(
+      moduleNames, commandLineArgs, workingDir, alreadySeenClangModules,
+      lookupModuleOutput);
   if (!clangModuleDependencies) {
     auto errorStr = toString(clangModuleDependencies.takeError());
     // We ignore the "module 'foo' not found" error, the Swift dependency
     // scanner will report such an error only if all of the module loaders
     // fail as well.
-    if (errorStr.find("fatal error: module '" + moduleName.str().str() +
+    //
+    // FIXME(Cyndy): Do we iterate through all modulenames to see which failed?
+    if (errorStr.find("fatal error: module '" + moduleNames.front().str() +
                       "' not found") == std::string::npos)
       ctx.Diags.diagnose(SourceLoc(), diag::clang_dependency_scan_error,
                          errorStr);

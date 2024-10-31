@@ -205,6 +205,28 @@ void ModuleLoader::findOverlayFiles(SourceLoc diagLoc, ModuleDecl *module,
   });
 }
 
+llvm::SmallVector<std::pair<ModuleDependencyID, ModuleDependencyInfo>, 1>
+ModuleLoader::getModuleDependencies(
+    Identifier moduleName, StringRef moduleOutputPath,
+    const llvm::DenseSet<clang::tooling::dependencies::ModuleID>
+        &alreadySeenClangModules,
+    clang::tooling::dependencies::DependencyScanningTool &clangScanningTool,
+    InterfaceSubContextDelegate &delegate, llvm::PrefixMapper *mapper,
+    bool isTestableImport) {
+  return {};
+}
+
+llvm::SmallVector<std::pair<ModuleDependencyID, ModuleDependencyInfo>, 1>
+ModuleLoader::getModuleDependencies(
+    ArrayRef<StringRef> moduleNames, StringRef moduleOutputPath,
+    const llvm::DenseSet<clang::tooling::dependencies::ModuleID>
+        &alreadySeenClangModules,
+    clang::tooling::dependencies::DependencyScanningTool &clangScanningTool,
+    InterfaceSubContextDelegate &delegate, llvm::PrefixMapper *mapper,
+    bool isTestableImport) {
+  return {};
+}
+
 llvm::StringMap<llvm::SmallSetVector<Identifier, 4>>
 ModuleDependencyInfo::collectCrossImportOverlayNames(
     ASTContext &ctx, StringRef moduleName,

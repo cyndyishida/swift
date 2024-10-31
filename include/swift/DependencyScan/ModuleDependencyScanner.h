@@ -43,7 +43,7 @@ private:
 
   /// Retrieve the module dependencies for the Clang module with the given name.
   ModuleDependencyVector
-  scanFilesystemForClangModuleDependency(Identifier moduleName,
+  scanFilesystemForClangModuleDependency(ArrayRef<StringRef> moduleNames,
                                          const ModuleDependenciesCache &cache);
 
   /// Retrieve the module dependencies for the Swift module with the given name.

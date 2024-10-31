@@ -484,12 +484,13 @@ public:
       StringRef moduleOutputPath, RemapPathCallback remapPath = nullptr);
 
   llvm::SmallVector<std::pair<ModuleDependencyID, ModuleDependencyInfo>, 1>
-  getModuleDependencies(Identifier moduleName, StringRef moduleOutputPath,
-                        const llvm::DenseSet<clang::tooling::dependencies::ModuleID> &alreadySeenClangModules,
-                        clang::tooling::dependencies::DependencyScanningTool &clangScanningTool,
-                        InterfaceSubContextDelegate &delegate,
-                        llvm::PrefixMapper *mapper,
-                        bool isTestableImport = false) override;
+  getModuleDependencies(
+      ArrayRef<StringRef> moduleNames, StringRef moduleOutputPath,
+      const llvm::DenseSet<clang::tooling::dependencies::ModuleID>
+          &alreadySeenClangModules,
+      clang::tooling::dependencies::DependencyScanningTool &clangScanningTool,
+      InterfaceSubContextDelegate &delegate, llvm::PrefixMapper *mapper,
+      bool isTestableImport = false) override;
 
   void recordBridgingHeaderOptions(
       ModuleDependencyInfo &MDI,
