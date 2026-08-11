@@ -540,6 +540,10 @@ public:
   /// Whether to search for cross import overlay on file system.
   bool DisableCrossImportOverlaySearch = false;
 
+  /// Whether to disable sharing SDK Swift modules built from a textual
+  /// interface across importing contexts, keeping a per-context variant.
+  bool DisableSDKModuleContextFreeBuild = false;
+
   /// Debug path mappings to apply to serialized search paths. These are
   /// specified in LLDB from the target.source-map entries.
   PathRemapper SearchPathRemapper;

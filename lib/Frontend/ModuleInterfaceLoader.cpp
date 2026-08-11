@@ -1791,6 +1791,9 @@ void InterfaceSubContextDelegateImpl::inheritOptionsForBuildingInterface(
   genericSubInvocation.getSearchPathOptions().ScannerPrefixMapper =
       SearchPathOpts.ScannerPrefixMapper;
 
+  genericSubInvocation.getSearchPathOptions().DisableSDKModuleContextFreeBuild =
+      SearchPathOpts.DisableSDKModuleContextFreeBuild;
+
   // Validate Clang modules once per-build session flags must be consistent
   // across all module sub-invocations
   if (clangImporterOpts.ValidateModulesOnce) {
@@ -2947,19 +2950,34 @@ void setOutputPath(ResultTy &resolvedOutputPath, const StringRef &moduleName,
   };
  
   // Dependency-scanner-specific module output path handling
+  auto runtimeResourcePath = CI.getSearchPathOptions().RuntimeResourcePath;
+  const bool isSDKInterface =
+      isPrefixedWith(sdkPath) || isPrefixedWith(runtimeResourcePath);
   if ((CI.getFrontendOptions().RequestedAction ==
        FrontendOptions::ActionType::ScanDependencies)) {
-    auto runtimeResourcePath = CI.getSearchPathOptions().RuntimeResourcePath;
-    if (isPrefixedWith(sdkPath) || isPrefixedWith(runtimeResourcePath))
+    if (isSDKInterface)
       outputPath = CI.getFrontendOptions().ExplicitSDKModulesOutputPath;
     else
       outputPath = CI.getFrontendOptions().ExplicitModulesOutputPath;
   }
 
+  // For SDK modules, exclude the importing context's clang arguments from the
+  // context hash so the module is shared across importing contexts rather than
+  // rebuilt per context. Clang module dependencies retain their own per-context
+  // hashes.
+  //
+  // TODO: Extend this beyond SDK modules to any module built from a textual
+  // interface.
+  const bool contextFreeBuild =
+      !CI.getSearchPathOptions().DisableSDKModuleContextFreeBuild;
+  ArgListTy canonicalExtraArgs;
+  const ArgListTy &hashExtraArgs =
+      (contextFreeBuild && isSDKInterface) ? canonicalExtraArgs : extraArgs;
+
   llvm::sys::path::append(outputPath, moduleName);
   outputPath.append("-");
   auto hashStart = outputPath.size();
-  outputPath.append(getContextHash(CI, interfacePath, sdkPath, extraArgs));
+  outputPath.append(getContextHash(CI, interfacePath, sdkPath, hashExtraArgs));
   resolvedOutputPath.hash = outputPath.str().substr(hashStart);
   outputPath.append(".");
   auto outExt = file_types::getExtension(file_types::TY_SwiftModuleFile);

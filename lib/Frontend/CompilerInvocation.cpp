@@ -2690,6 +2690,9 @@ static bool ParseSearchPathArgs(SearchPathOptions &Opts, ArgList &Args,
   Opts.DisableCrossImportOverlaySearch |=
       Args.hasArg(OPT_disable_cross_import_overlay_search);
 
+  Opts.DisableSDKModuleContextFreeBuild |=
+      Args.hasArg(OPT_disable_sdk_module_context_free_build);
+
   for (auto &Mod : Args.getAllArgValues(OPT_dependency_only_import)) {
     Opts.DependencyOnlyModuleImports.push_back(Mod);
   }

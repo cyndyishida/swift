@@ -287,6 +287,11 @@ def module_import_from_cas: Flag<["-"], "module-import-from-cas">,
 def disable_cross_import_overlay_search: Flag<["-"], "disable-cross-import-overlay-search">,
   HelpText<"Disable searching for cross import overlay file">;
 
+def disable_sdk_module_context_free_build: Flag<["-"], "disable-sdk-module-context-free-build">,
+  HelpText<"Disable building SDK Swift modules from their textual interface "
+           "independently of the importing context; re-enables per-context "
+           "module variants">;
+
 def explicit_swift_module_map
   : Separate<["-"], "explicit-swift-module-map-file">, MetaVarName<"<path>">,
     HelpText<"Specify a JSON file containing information of explicit Swift modules">;
