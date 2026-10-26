@@ -583,6 +583,22 @@ ModuleDependencyScanningWorker::scanHeaderDependenciesOfSwiftModule(
   return *clangModuleDependencies;
 }
 
+llvm::StringMap<std::string>
+ModuleDependencyScanningWorker::findClangModuleMapFiles(
+    ArrayRef<StringRef> moduleNames) {
+  // The lookups report no module outputs.
+  auto controller = clangScanningTool.createActionController(nullptr);
+  // Setting up the compiler instance was already checked, with diagnostics,
+  // when the scanner was created, so ignore diagnostics here.
+  clang::IgnoringDiagConsumer diagConsumer;
+  auto moduleMapFiles = clangScanningTool.getModuleMapsForModules(
+      clangScanningWorkingDirectoryPath, clangScanningModuleCommandLineArgs,
+      diagConsumer, *controller, moduleNames);
+  if (!moduleMapFiles)
+    return {};
+  return std::move(*moduleMapFiles);
+}
+
 template <bool CountLookup, typename Function, typename... Args>
 auto ModuleDependencyScanner::withDependencyScanningWorker(Function &&F,
                                                            Args &&...ArgList) {
@@ -617,6 +633,17 @@ auto ModuleDependencyScanner::withDependencyScanningWorker(Function &&F,
   auto result = Task();
   releaseWorker(std::move(worker));
   return result;
+}
+
+llvm::StringMap<std::string> ModuleDependencyScanner::findClangModuleMapFiles(
+    ArrayRef<StringRef> moduleNames) {
+  // Count each name as one lookup: the single withDependencyScanningWorker
+  // call below looks up many names, so it doesn't count.
+  NumLookups += moduleNames.size();
+  return withDependencyScanningWorker</*CountLookup=*/false>(
+      [&](ModuleDependencyScanningWorker *ScanningWorker) {
+        return ScanningWorker->findClangModuleMapFiles(moduleNames);
+      });
 }
 
 llvm::Error ModuleDependencyScanningWorker::createCacheKeyForEmbeddedHeader(
