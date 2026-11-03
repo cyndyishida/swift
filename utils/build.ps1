@@ -4761,21 +4761,15 @@ function Build-SDK([Hashtable] $Platform, [Hashtable] $Context) {
     # module 'Dispatch'" on incremental builds (two copies otherwise found).
     $DispatchVFS = "$(Get-ProjectBinaryCache $Platform ([Project]"${Variant}Dispatch"))\dispatch-vfs-overlay.yaml"
     if (Test-Path $DispatchVFS) {
-      $DispatchSrc  = "$SourceCache\swift-corelibs-libdispatch\dispatch".Replace('\', '/')
+      # Only rewrite the module map target, so the rest of libdispatch's
+      # overlay (e.g. its parent module map) is preserved.
+      $SourceMap    = "$SourceCache\swift-corelibs-libdispatch\dispatch\generic\module.modulemap".Replace('\', '/')
       $InstalledMap = "$SDKRoot\usr\include\dispatch\module.modulemap".Replace('\', '/')
-      Set-Content -Path $DispatchVFS -Encoding UTF8 -Value @"
----
-version: 0
-case-sensitive: false
-use-external-names: false
-roots:
-  - name: '$DispatchSrc'
-    type: directory
-    contents:
-      - name: module.modulemap
-        type: file
-        external-contents: '$InstalledMap'
-"@
+      $Overlay = (Get-Content -Path $DispatchVFS -Raw -Encoding UTF8) -ireplace [Regex]::Escape($SourceMap), $InstalledMap
+      if (-not $Overlay.Contains($InstalledMap)) {
+        throw "Unable to redirect the dispatch module map in $DispatchVFS"
+      }
+      Set-Content -Path $DispatchVFS -Encoding UTF8 -NoNewline -Value $Overlay
     }
 
     if ($BuildFoundation) {
